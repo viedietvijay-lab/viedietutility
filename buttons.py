@@ -23,6 +23,17 @@ def create_colored_keyboard(buttons, row_width=1):
         kb.row(*btns)
     return kb
 
+# ==================== MAIN MENU (Compatibility) ====================
+
+def main_menu():
+    """
+    Legacy main menu – now redirects to services panel.
+    Kept for backward compatibility.
+    """
+    return services_panel()
+
+# ==================== BACK BUTTONS ====================
+
 def back_button():
     return create_colored_keyboard([[("◀️ Back", "menu:back", "primary")]])
 
