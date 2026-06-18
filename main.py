@@ -2,10 +2,10 @@
 import telebot
 import time
 from bot_instance import bot
-from config import ADMIN_IDS
+from config import ADMIN_IDS, REFERRAL_POINTS, SIGNUP_BONUS, FORCE_GROUP
 from database import Database
 from force_join import check_force_join, force_join_keyboard
-from buttons import bottom_menu, services_panel, back_button, services_back_button, profile_menu, support_menu, orders_menu, track_menu, deposit_menu, refer_menu, next_page_menu
+from buttons import *
 from admin import admin_panel, admin_actions
 from number_checker import *
 from downloaders import *
@@ -22,7 +22,6 @@ from premium import *
 db = Database()
 
 # ==================== NAVIGATION HISTORY ====================
-# Store user navigation history
 nav_history = {}
 
 def push_nav(user_id, menu):
@@ -177,18 +176,25 @@ def track_handler(message):
         reply_markup=track_menu()
     )
 
-@bot.message_handler(func=lambda m: m.text == "💰 Deposit")
+@bot.message_handler(func=lambda m: m.text == "⭐ Premium")
 @check_ban
 @require_join
-def deposit_handler(message):
+def premium_handler(message):
     user_id = message.from_user.id
-    push_nav(user_id, "deposit:start")
-    bot.send_message(
-        user_id,
-        "💰 <b>Deposit</b>\n\nAdd funds to your account.",
-        parse_mode='HTML',
-        reply_markup=deposit_menu()
-    )
+    push_nav(user_id, "premium:status")
+    is_prem = db.is_premium(user_id)
+    text = f"""
+⭐ <b>Premium Plan</b>
+
+Price: ₹49 (one-time)
+Benefits:
+• Unlimited tools
+• No point deduction
+• All features unlocked
+
+Status: {'✅ Active' if is_prem else '❌ Inactive'}
+"""
+    bot.send_message(user_id, text, parse_mode='HTML', reply_markup=premium_menu())
 
 @bot.message_handler(func=lambda m: m.text == "🔗 Refer")
 @check_ban
@@ -196,7 +202,6 @@ def deposit_handler(message):
 def refer_handler(message):
     user_id = message.from_user.id
     push_nav(user_id, "refer:link")
-    user = db.get_user(user_id)
     link = f"https://t.me/{bot.get_me().username}?start={user_id}"
     text = f"""
 🔗 <b>Referral Link</b>
@@ -217,12 +222,20 @@ Share this link with your friends!
 def support_handler(message):
     user_id = message.from_user.id
     push_nav(user_id, "support:contact")
-    bot.send_message(
-        user_id,
-        "🆘 <b>SUPPORT</b>\n\nNeed help or facing any issue?\n\nSupport: @vishalcodeverseowner\n\nClick the button below to contact support.",
-        parse_mode='HTML',
-        reply_markup=support_menu()
-    )
+    text = f"""
+🆘 <b>SUPPORT</b>
+
+Need help or facing any issue?
+
+👥 Join our support group:
+{FORCE_GROUP}
+
+Click the button below to join.
+"""
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("👥 Join Support Group", url=FORCE_GROUP, style="primary"))
+    kb.add(types.InlineKeyboardButton("◀️ Back", callback_data="menu:services", style="primary"))
+    bot.send_message(user_id, text, parse_mode='HTML', reply_markup=kb)
 
 @bot.message_handler(func=lambda m: m.text == "📋 Next Page")
 @check_ban
@@ -246,12 +259,10 @@ def handle_back(call):
     user_id = call.from_user.id
     prev_menu = pop_nav(user_id)
     
-    # If no history, go to services
     if not prev_menu or prev_menu == "menu:services":
         services_panel_handler(call.message)
         return
     
-    # Navigate based on previous menu
     if prev_menu.startswith("profile:"):
         profile_handler(call.message)
     elif prev_menu.startswith("support:"):
@@ -260,8 +271,8 @@ def handle_back(call):
         orders_handler(call.message)
     elif prev_menu.startswith("track:"):
         track_handler(call.message)
-    elif prev_menu.startswith("deposit:"):
-        deposit_handler(call.message)
+    elif prev_menu.startswith("premium:"):
+        premium_handler(call.message)
     elif prev_menu.startswith("refer:"):
         refer_handler(call.message)
     elif prev_menu.startswith("settings:"):
@@ -288,11 +299,8 @@ def back_to_services(call):
 def services_navigation(call):
     user_id = call.from_user.id
     menu = call.data.split(":")[1]
-    
-    # Store current menu in history
     push_nav(user_id, f"menu:{menu}")
     
-    # Map menu to handlers
     menu_map = {
         "ai_tools": "🤖 AI Tools - Coming Soon!",
         "downloaders": "📥 Downloaders - Coming Soon!",
@@ -309,7 +317,6 @@ def services_navigation(call):
         "firebase": "🔥 Firebase - Coming Soon!"
     }
     
-    # Send processing message with back button
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(types.InlineKeyboardButton("◀️ Back to Services", callback_data="menu:services", style="primary"))
     
@@ -322,7 +329,7 @@ def services_navigation(call):
     )
     bot.answer_callback_query(call.id)
 
-# ==================== CALLBACK HANDLERS FOR OTHER MENUS ====================
+# ==================== OTHER CALLBACKS ====================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("profile:"))
 @check_ban_callback
@@ -344,22 +351,77 @@ def orders_actions(call):
 def track_actions(call):
     bot.answer_callback_query(call.id, "✅ Track feature coming soon!", show_alert=True)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("deposit:"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("premium:"))
 @check_ban_callback
-def deposit_actions(call):
-    bot.answer_callback_query(call.id, "✅ Deposit feature coming soon!", show_alert=True)
+def premium_actions(call):
+    user_id = call.from_user.id
+    action = call.data.split(":")[1]
+    if action == "buy":
+        # Trigger the existing premium buy flow (from premium.py)
+        # We need to call the handler from premium.py
+        # Simpler: send a message with the premium plan
+        is_prem = db.is_premium(user_id)
+        if is_prem:
+            bot.answer_callback_query(call.id, "✅ Already premium!", show_alert=True)
+        else:
+            # Call the buy_premium function from premium.py (if imported)
+            # For now, just show a message
+            bot.edit_message_text(
+                "💳 <b>Buy Premium</b>\n\nClick the button below to start payment.",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode='HTML',
+                reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
+                    types.InlineKeyboardButton("💳 Proceed to Payment", callback_data="premium:buy_confirm", style="success"),
+                    types.InlineKeyboardButton("◀️ Back", callback_data="menu:services", style="primary")
+                )
+            )
+        bot.answer_callback_query(call.id)
+        return
+    elif action == "status":
+        is_prem = db.is_premium(user_id)
+        bot.answer_callback_query(call.id, f"Premium: {'✅ Active' if is_prem else '❌ Inactive'}", show_alert=True)
+        return
+    elif action == "buy_confirm":
+        # This is a placeholder – you can connect to premium.py's actual buy function
+        bot.answer_callback_query(call.id, "✅ Payment integration coming soon!", show_alert=True)
+        return
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("refer:"))
 @check_ban_callback
 def refer_actions(call):
-    bot.answer_callback_query(call.id, "✅ Refer feature coming soon!", show_alert=True)
+    user_id = call.from_user.id
+    action = call.data.split(":")[1]
+    if action == "link":
+        link = f"https://t.me/{bot.get_me().username}?start={user_id}"
+        bot.answer_callback_query(call.id, "📋 Link copied to your chat!", show_alert=False)
+        bot.send_message(user_id, f"🔗 Your referral link:\n<code>{link}</code>", parse_mode='HTML')
+    elif action == "stats":
+        user = db.get_user(user_id)
+        referrals = db.get_referral_count(user_id)  # you may need to implement this
+        bot.answer_callback_query(call.id, f"📊 Total Referrals: {referrals}", show_alert=True)
+    bot.answer_callback_query(call.id)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("settings:"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("settings:") or call.data.startswith("security:") or call.data.startswith("help:"))
 @check_ban_callback
-def settings_actions(call):
-    bot.answer_callback_query(call.id, "✅ Settings feature coming soon!", show_alert=True)
+def other_actions(call):
+    page = call.data.split(":")[0]
+    if page == "settings":
+        bot.answer_callback_query(call.id, "⚙️ Settings - Coming Soon!", show_alert=True)
+    elif page == "security":
+        bot.answer_callback_query(call.id, "🔐 Security - Coming Soon!", show_alert=True)
+    elif page == "help":
+        bot.answer_callback_query(call.id, "💡 Help Center - Coming Soon!", show_alert=True)
+    # Edit message to show something
+    bot.edit_message_text(
+        f"📌 <b>{page.title()}</b>\n\nThis feature is under development.",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode='HTML',
+        reply_markup=back_button()
+    )
 
-# ===================== CHECK JOIN CALLBACK ====================
+# ==================== CHECK JOIN ====================
 
 @bot.callback_query_handler(func=lambda call: call.data == "check_join")
 def check_join_callback(call):
