@@ -3,7 +3,7 @@ import telebot
 from telebot import types
 from config import BOT_TOKEN, FORCE_CHANNEL, FORCE_GROUP
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 
 def check_force_join(user_id):
     try:
