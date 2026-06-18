@@ -1,7 +1,6 @@
 # main.py
 import telebot
 import time
-from ai_code_generator import *
 from bot_instance import bot
 from config import ADMIN_IDS, REFERRAL_POINTS, SIGNUP_BONUS, FORCE_GROUP
 from database import Database
