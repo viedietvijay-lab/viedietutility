@@ -1,0 +1,7 @@
+pyTelegramBotAPI==4.22.1
+requests==2.32.3
+qrcode==7.4.2
+Pillow==10.1.0
+reportlab==4.0.7
+instaloader==4.11
+yt-dlp==2024.12.3
