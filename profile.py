@@ -4,7 +4,7 @@ from config import BOT_TOKEN
 from database import Database
 from buttons import back_button
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 db = Database()
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu:profile")
