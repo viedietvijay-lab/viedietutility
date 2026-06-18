@@ -1,4 +1,4 @@
-\# number_checker.py
+# number_checker.py
 import telebot
 import requests
 import re
