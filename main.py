@@ -17,7 +17,7 @@ from bypass import *
 from firebase import *
 from profile import *
 from support import *
-from premium import *
+from premium import *   # contains buy_premium
 
 db = Database()
 
@@ -74,7 +74,6 @@ def require_join_callback(func):
     return wrapper
 
 # ==================== START HANDLER ====================
-
 @bot.message_handler(commands=['start'])
 @check_ban
 @require_join
@@ -150,52 +149,6 @@ def profile_handler(message):
         text = "❌ User not found."
     bot.send_message(user_id, text, parse_mode='HTML', reply_markup=profile_menu())
 
-@bot.message_handler(func=lambda m: m.text == "📦 My Orders")
-@check_ban
-@require_join
-def orders_handler(message):
-    user_id = message.from_user.id
-    push_nav(user_id, "orders:recent")
-    bot.send_message(
-        user_id,
-        "📦 <b>My Orders</b>\n\nYour recent orders will appear here.",
-        parse_mode='HTML',
-        reply_markup=orders_menu()
-    )
-
-@bot.message_handler(func=lambda m: m.text == "📦 Track Order")
-@check_ban
-@require_join
-def track_handler(message):
-    user_id = message.from_user.id
-    push_nav(user_id, "track:order")
-    bot.send_message(
-        user_id,
-        "🔍 <b>Track Order</b>\n\nSend your order ID to track.",
-        parse_mode='HTML',
-        reply_markup=track_menu()
-    )
-
-@bot.message_handler(func=lambda m: m.text == "⭐ Premium")
-@check_ban
-@require_join
-def premium_handler(message):
-    user_id = message.from_user.id
-    push_nav(user_id, "premium:status")
-    is_prem = db.is_premium(user_id)
-    text = f"""
-⭐ <b>Premium Plan</b>
-
-Price: ₹29 (one-time)
-Benefits:
-• Unlimited tools
-• No point deduction
-• All features unlocked
-
-Status: {'✅ Active' if is_prem else '❌ Inactive'}
-"""
-    bot.send_message(user_id, text, parse_mode='HTML', reply_markup=premium_menu())
-
 @bot.message_handler(func=lambda m: m.text == "🔗 Refer")
 @check_ban
 @require_join
@@ -237,18 +190,25 @@ Click the button below to join.
     kb.add(types.InlineKeyboardButton("◀️ Back", callback_data="menu:back", style="danger"))
     bot.send_message(user_id, text, parse_mode='HTML', reply_markup=kb)
 
-@bot.message_handler(func=lambda m: m.text == "📋 Next Page")
+@bot.message_handler(func=lambda m: m.text == "⭐ Premium")
 @check_ban
 @require_join
-def next_page_handler(message):
+def premium_handler(message):
     user_id = message.from_user.id
-    push_nav(user_id, "settings:page")
-    bot.send_message(
-        user_id,
-        "📋 <b>More Options</b>",
-        parse_mode='HTML',
-        reply_markup=next_page_menu()
-    )
+    push_nav(user_id, "premium:status")
+    is_prem = db.is_premium(user_id)
+    text = f"""
+⭐ <b>Premium Plan</b>
+
+Price: ₹{PREMIUM_PRICE} (one-time)
+Benefits:
+• Unlimited tools
+• No point deduction
+• All features unlocked
+
+Status: {'✅ Active' if is_prem else '❌ Inactive'}
+"""
+    bot.send_message(user_id, text, parse_mode='HTML', reply_markup=premium_menu())
 
 # ==================== BACK BUTTON HANDLER ====================
 
@@ -265,16 +225,10 @@ def back_button_handler(call):
         profile_handler(call.message)
     elif prev_menu.startswith("support:"):
         support_handler(call.message)
-    elif prev_menu.startswith("orders:"):
-        orders_handler(call.message)
-    elif prev_menu.startswith("track:"):
-        track_handler(call.message)
-    elif prev_menu.startswith("premium:"):
-        premium_handler(call.message)
     elif prev_menu.startswith("refer:"):
         refer_handler(call.message)
-    elif prev_menu.startswith("settings:"):
-        next_page_handler(call.message)
+    elif prev_menu.startswith("premium:"):
+        premium_handler(call.message)
     else:
         services_panel_handler(call.message)
     
@@ -327,22 +281,17 @@ def services_navigation(call):
     )
     bot.answer_callback_query(call.id)
 
-# ==================== PROFILE / ORDERS / TRACK / REFER CALLBACKS ====================
+# ==================== OTHER CALLBACKS ====================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("profile:"))
 @check_ban_callback
 def profile_actions(call):
     bot.answer_callback_query(call.id, "✅ Profile feature coming soon!", show_alert=True)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("orders:"))
+@bot.callback_query_handler(func=lambda call: call.data.startswith("support:"))
 @check_ban_callback
-def orders_actions(call):
-    bot.answer_callback_query(call.id, "✅ Orders feature coming soon!", show_alert=True)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("track:"))
-@check_ban_callback
-def track_actions(call):
-    bot.answer_callback_query(call.id, "✅ Track feature coming soon!", show_alert=True)
+def support_actions(call):
+    bot.answer_callback_query(call.id, "✅ Support feature coming soon!", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("refer:"))
 @check_ban_callback
@@ -355,19 +304,6 @@ def refer_actions(call):
         bot.send_message(user_id, f"🔗 Your referral link:\n<code>{link}</code>", parse_mode='HTML')
     elif action == "stats":
         bot.answer_callback_query(call.id, "📊 Referral stats coming soon!", show_alert=True)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("settings:") or call.data.startswith("security:") or call.data.startswith("help:"))
-@check_ban_callback
-def other_actions(call):
-    page = call.data.split(":")[0]
-    bot.answer_callback_query(call.id, f"✅ {page.title()} feature coming soon!", show_alert=True)
-    bot.edit_message_text(
-        f"📌 <b>{page.title()}</b>\n\nThis feature is under development.",
-        chat_id=call.message.chat.id,
-        message_id=call.message.message_id,
-        parse_mode='HTML',
-        reply_markup=back_button()
-    )
 
 # ==================== PREMIUM BUY HANDLER ====================
 
