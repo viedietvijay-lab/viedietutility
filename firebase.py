@@ -3,7 +3,7 @@ import telebot
 from config import BOT_TOKEN
 from buttons import back_button, main_menu
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu:firebase")
 def firebase_menu(call):
