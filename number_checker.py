@@ -92,77 +92,38 @@ def flipkart_check(phone):
 
 # ==================== BREVISTAY CHECKER (from your script) ====================
 
-def brevistay_check(phone):
-    try:
-        get_random_coords()
-        url = "https://www.brevistay.com/cst/app-api/login"
-        headers = {
-            "accept": "application/json, text/plain, */*",
-            "accept-language": "en-US,en;q=0.9",
-            "brevi-channel": "DESKTOP_WEB",
-            "content-type": "application/json",
-            "origin": "https://www.brevistay.com",
-            "referer": "https://www.brevistay.com/login",
-            "user-agent": get_random_user_agent()
-        }
-        payload = {"is_otp": 1, "is_password": 0, "mobile": phone}
-        
-        response = safe_request("POST", url, headers=headers, json=payload)
-        if not response:
-            return False, "⚠️ Request timeout. Try again."
-        
-        if response.status_code != 200:
-            return False, f"⚠️ HTTP Error {response.status_code}"
-        
+def brevistay_check(number):
+    url = "https://www.brevistay.com/cst/app-api/login"
+    payload = {"is_otp": 1, "is_password": 0, "mobile": number}
+    headers = {"Content-Type": "application/json"}  # aur baaki headers
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code == 200:
         data = response.json()
-        if data.get("status") == "SUCCESS":
-            is_registered = data.get("is_user_registered") == "1"
-            if is_registered:
-                return True, "✅ Registered on Brevistay"
-            else:
-                return False, "❌ Not Registered on Brevistay"
+        # Abhi jo condition hai, usko is tarah karo:
+        if data.get("status") == "SUCCESS" and data.get("is_user_registered") in ("1", 1, True):
+            return "✅ Registered"
         else:
-            return False, f"⚠️ API Error: {data.get('status', 'Unknown')}"
-    except Exception as e:
-        return False, f"⚠️ Error: {str(e)[:80]}"
+            return "❌ Not Registered"
+    else:
+        return "⚠️ API Error"
 
 # ==================== SWIGGY CHECKER (from your script) ====================
 
-def swiggy_check(phone):
-    try:
-        get_random_coords()
-        url = "https://www.swiggy.com/mapi/auth/signin-check"
-        headers = {
-            "User-Agent": get_random_user_agent(),
-            "Accept": "application/json, text/plain, */*",
-            "Content-Language": "en-IN,en;q=0.9",
-            "Content-Type": "application/json",
-            "Origin": "https://www.swiggy.com",
-            "Referer": "https://www.swiggy.com/",
-            "x-app-version": "2025.1.0",
-            "x-platform": "web"
-        }
-        payload = {"phoneNumber": phone}
-        
-        response = safe_request("POST", url, headers=headers, json=payload)
-        if not response:
-            return False, "⚠️ Request timeout. Try again."
-        
-        if response.status_code != 200:
-            return False, f"⚠️ HTTP Error {response.status_code}"
-        
+def swiggy_check(number):
+    url = "https://www.swiggy.com/dapi/auth/signin-with-check"
+    # CSRF token chahiye, pehle fetch karna padega (agar code mein pehle se hai toh theek)
+    payload = {"mobile": number, "password": "", "_csrf": your_csrf}
+    headers = {"Content-Type": "application/json", "platform": "dweb"}
+    response = requests.post(url, json=payload, headers=headers)
+    if response.status_code == 200:
         data = response.json()
-        if data.get("statusCode") == 0:
-            user_data = data.get("data", {})
-            is_registered = user_data.get("registered", False)
-            if is_registered:
-                return True, "✅ Registered on Swiggy"
-            else:
-                return False, "❌ Not Registered on Swiggy"
+        # Sahi field: data["data"]["registered"]
+        if data.get("data", {}).get("registered") == True:
+            return "✅ Registered"
         else:
-            return False, f"⚠️ API Error: {data.get('statusCode', 'Unknown')}"
-    except Exception as e:
-        return False, f"⚠️ Error: {str(e)[:80]}"
+            return "❌ Not Registered"
+    else:
+        return "⚠️ API Error: " + str(response.status_code)
 
 # ==================== BOT HANDLERS ====================
 
