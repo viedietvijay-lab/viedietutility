@@ -1,154 +1,387 @@
-# admin.py
+# main.py
 import telebot
 import time
-import sqlite3
-from telebot import types
 from bot_instance import bot
-from config import ADMIN_IDS, DB_PATH
+from config import ADMIN_IDS, REFERRAL_POINTS, SIGNUP_BONUS
 from database import Database
-from buttons import create_colored_keyboard, services_panel
+from force_join import check_force_join, force_join_keyboard
+from buttons import bottom_menu, services_panel, back_button, services_back_button, profile_menu, support_menu, orders_menu, track_menu, deposit_menu, refer_menu, next_page_menu
+from admin import admin_panel, admin_actions
+from number_checker import *
+from downloaders import *
+from temp_mail import *
+from upi import *
+from hash_tools import *
+from image_to_pdf import *
+from bypass import *
+from firebase import *
+from profile import *
+from support import *
+from premium import *
 
 db = Database()
 
-def admin_menu():
-    buttons = [
-        [("📊 Stats", "admin:stats", "primary")],
-        [("📢 Broadcast", "admin:broadcast", "warning")],
-        [("🚫 Ban", "admin:ban", "danger")],
-        [("✅ Unban", "admin:unban", "success")],
-        [("📋 Banned List", "admin:banned", "warning")],
-        [("💰 Add Points", "admin:add_pts", "success")],
-        [("⭐ Give Premium", "admin:premium", "primary")],
-        [("🔙 Back to Services", "menu:services", "primary")]
-    ]
-    return create_colored_keyboard(buttons)
+# ==================== NAVIGATION HISTORY ====================
+nav_history = {}
 
-@bot.message_handler(commands=['admin'])
-def admin_panel(message):
+def push_nav(user_id, menu):
+    if user_id not in nav_history:
+        nav_history[user_id] = []
+    nav_history[user_id].append(menu)
+
+def pop_nav(user_id):
+    if user_id in nav_history and nav_history[user_id]:
+        return nav_history[user_id].pop()
+    return "menu:services"
+
+def clear_nav(user_id):
+    if user_id in nav_history:
+        nav_history[user_id] = []
+
+# ==================== DECORATORS ====================
+def check_ban(func):
+    def wrapper(message):
+        banned, _ = db.is_banned(message.from_user.id)
+        if banned:
+            bot.send_message(message.chat.id, "🚫 You are banned!")
+            return
+        return func(message)
+    return wrapper
+
+def check_ban_callback(func):
+    def wrapper(call):
+        banned, _ = db.is_banned(call.from_user.id)
+        if banned:
+            bot.answer_callback_query(call.id, "🚫 You are banned!", show_alert=True)
+            return
+        return func(call)
+    return wrapper
+
+def require_join(func):
+    def wrapper(message):
+        if not check_force_join(message.from_user.id):
+            bot.send_message(message.chat.id, "🔒 Please join our channel first!", reply_markup=force_join_keyboard())
+            return
+        return func(message)
+    return wrapper
+
+def require_join_callback(func):
+    def wrapper(call):
+        if not check_force_join(call.from_user.id):
+            bot.answer_callback_query(call.id, "🔒 Join channel first!", show_alert=True)
+            return
+        return func(call)
+    return wrapper
+
+# ==================== START HANDLER ====================
+
+@bot.message_handler(commands=['start'])
+@check_ban
+@require_join
+def send_welcome(message):
     user_id = message.from_user.id
-    if user_id not in ADMIN_IDS:
-        bot.send_message(user_id, "❌ Access Denied!")
-        return
-    bot.send_message(user_id, "👑 <b>Admin Panel</b>", parse_mode='HTML', reply_markup=admin_menu())
+    args = message.text.split()
+    referred_by = int(args[1]) if len(args) > 1 and args[1].isdigit() else None
+    db.register_user(user_id, message.from_user.username, message.from_user.first_name, message.from_user.last_name, referred_by)
+    
+    user = db.get_user(user_id)
+    points = user['points'] if user else 0
+    premium = db.is_premium(user_id)
+    
+    welcome = f"""
+🌟 <b>Welcome to Viediet Utility!</b>
 
-# ==================== ADMIN ACTIONS ====================
+🤖 Your all-in-one Telegram bot
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("admin:"))
-def admin_actions(call):
+━━━━━━━━━━━━━━━━━━━━
+💰 Points: {points}
+⭐ Premium: {'✅ Active' if premium else '❌ Inactive'}
+━━━━━━━━━━━━━━━━━━━━
+
+📌 Select an option from the menu below.
+
+<i>Powered By Viediet Utility</i>
+"""
+    
+    clear_nav(user_id)
+    bot.send_message(user_id, welcome, parse_mode='HTML', reply_markup=bottom_menu())
+
+# ==================== BOTTOM MENU HANDLERS ====================
+
+@bot.message_handler(func=lambda m: m.text == "🛠️ Services")
+@check_ban
+@require_join
+def services_panel_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "menu:services")
+    bot.send_message(
+        user_id,
+        "🛠️ <b>SERVICES PANEL</b>\n\nSelect your favorite platform below:",
+        parse_mode='HTML',
+        reply_markup=services_panel()
+    )
+
+@bot.message_handler(func=lambda m: m.text == "👤 Profile")
+@check_ban
+@require_join
+def profile_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "profile:account")
+    user = db.get_user(user_id)
+    if user:
+        banned, _ = db.is_banned(user_id)
+        premium = db.is_premium(user_id)
+        text = f"""
+👤 <b>Your Profile</b>
+
+🆔 ID: <code>{user_id}</code>
+👤 @{user['username'] or 'N/A'}
+📛 {user['first_name'] or 'N/A'}
+📅 Joined: {user['join_date']}
+💰 Points: {user['points']}
+⭐ Premium: {'✅' if premium else '❌'}
+📊 Usage: {user['usage_count']} requests
+🚫 Banned: {'Yes' if banned else 'No'}
+
+👥 Referral Link:
+<code>https://t.me/{bot.get_me().username}?start={user_id}</code>
+"""
+    else:
+        text = "❌ User not found."
+    bot.send_message(user_id, text, parse_mode='HTML', reply_markup=profile_menu())
+
+@bot.message_handler(func=lambda m: m.text == "📦 My Orders")
+@check_ban
+@require_join
+def orders_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "orders:recent")
+    bot.send_message(
+        user_id,
+        "📦 <b>My Orders</b>\n\nYour recent orders will appear here.",
+        parse_mode='HTML',
+        reply_markup=orders_menu()
+    )
+
+@bot.message_handler(func=lambda m: m.text == "📦 Track Order")
+@check_ban
+@require_join
+def track_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "track:order")
+    bot.send_message(
+        user_id,
+        "🔍 <b>Track Order</b>\n\nSend your order ID to track.",
+        parse_mode='HTML',
+        reply_markup=track_menu()
+    )
+
+@bot.message_handler(func=lambda m: m.text == "💰 Deposit")
+@check_ban
+@require_join
+def deposit_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "deposit:start")
+    bot.send_message(
+        user_id,
+        "💰 <b>Deposit</b>\n\nAdd funds to your account.",
+        parse_mode='HTML',
+        reply_markup=deposit_menu()
+    )
+
+@bot.message_handler(func=lambda m: m.text == "🔗 Refer")
+@check_ban
+@require_join
+def refer_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "refer:link")
+    user = db.get_user(user_id)
+    link = f"https://t.me/{bot.get_me().username}?start={user_id}"
+    text = f"""
+🔗 <b>Referral Link</b>
+
+<code>{link}</code>
+
+✨ <b>Benefits:</b>
+• Each referral → +{REFERRAL_POINTS} points
+• First time user → +{SIGNUP_BONUS} bonus
+
+Share this link with your friends!
+"""
+    bot.send_message(user_id, text, parse_mode='HTML', reply_markup=refer_menu())
+
+@bot.message_handler(func=lambda m: m.text == "🆘 Support")
+@check_ban
+@require_join
+def support_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "support:contact")
+    bot.send_message(
+        user_id,
+        "🆘 <b>SUPPORT</b>\n\nNeed help or facing any issue?\n\nSupport: @vishalcodeverseowner\n\nClick the button below to contact support.",
+        parse_mode='HTML',
+        reply_markup=support_menu()
+    )
+
+@bot.message_handler(func=lambda m: m.text == "📋 Next Page")
+@check_ban
+@require_join
+def next_page_handler(message):
+    user_id = message.from_user.id
+    push_nav(user_id, "settings:page")
+    bot.send_message(
+        user_id,
+        "📋 <b>More Options</b>",
+        parse_mode='HTML',
+        reply_markup=next_page_menu()
+    )
+
+# ==================== BACK NAVIGATION ====================
+
+@bot.callback_query_handler(func=lambda call: call.data == "menu:back")
+@check_ban_callback
+@require_join_callback
+def handle_back(call):
     user_id = call.from_user.id
-    if user_id not in ADMIN_IDS:
-        bot.answer_callback_query(call.id, "❌ Access Denied!", show_alert=True)
+    prev_menu = pop_nav(user_id)
+    
+    if not prev_menu or prev_menu == "menu:services":
+        services_panel_handler(call.message)
         return
     
-    action = call.data.split(":")[1]
+    if prev_menu.startswith("profile:"):
+        profile_handler(call.message)
+    elif prev_menu.startswith("support:"):
+        support_handler(call.message)
+    elif prev_menu.startswith("orders:"):
+        orders_handler(call.message)
+    elif prev_menu.startswith("track:"):
+        track_handler(call.message)
+    elif prev_menu.startswith("deposit:"):
+        deposit_handler(call.message)
+    elif prev_menu.startswith("refer:"):
+        refer_handler(call.message)
+    elif prev_menu.startswith("settings:"):
+        next_page_handler(call.message)
+    else:
+        services_panel_handler(call.message)
     
-    if action == "stats":
-        total_users = db.get_user_count()
-        banned_users = len(db.get_banned_users())
-        text = f"📊 <b>Bot Statistics</b>\n\n👥 Total Users: {total_users}\n🚫 Banned Users: {banned_users}\n✅ Active Users: {total_users - banned_users}"
-        bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.answer_callback_query(call.id)
-        return
-    
-    if action == "banned":
-        banned = db.get_banned_users()
-        if not banned:
-            text = "✅ No banned users."
-        else:
-            text = "🚫 <b>Banned Users</b>\n\n"
-            for b in banned[:10]:
-                text += f"• {b['user_id']} - {b['reason'] or 'No reason'}\n"
-            if len(banned) > 10:
-                text += f"\n... and {len(banned)-10} more"
-        bot.edit_message_text(text, chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.answer_callback_query(call.id)
-        return
-    
-    if action == "ban":
-        bot.edit_message_text("🚫 <b>Ban User</b>\n\nSend user ID and reason:\n<code>123456789 Spam</code>", chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, handle_ban_input)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if action == "unban":
-        bot.edit_message_text("✅ <b>Unban User</b>\n\nSend user ID to unban:", chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, handle_unban_input)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if action == "broadcast":
-        bot.edit_message_text("📢 <b>Broadcast</b>\n\nSend your message:", chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, handle_broadcast)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if action == "add_pts":
-        bot.edit_message_text("💰 <b>Add Points</b>\n\nSend user ID and points:\n<code>123456789 10</code>", chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, handle_add_points)
-        bot.answer_callback_query(call.id)
-        return
-    
-    if action == "premium":
-        bot.edit_message_text("⭐ <b>Give Premium</b>\n\nSend user ID:", chat_id=call.message.chat.id, message_id=call.message.message_id, parse_mode='HTML')
-        bot.register_next_step_handler(call.message, handle_give_premium)
-        bot.answer_callback_query(call.id)
-        return
-    
-    bot.answer_callback_query(call.id, "❌ Unknown action", show_alert=True)
+    bot.answer_callback_query(call.id)
 
-# ==================== HANDLER FUNCTIONS ====================
+@bot.callback_query_handler(func=lambda call: call.data == "menu:services")
+@check_ban_callback
+@require_join_callback
+def back_to_services(call):
+    user_id = call.from_user.id
+    clear_nav(user_id)
+    services_panel_handler(call.message)
+    bot.answer_callback_query(call.id)
 
-def handle_ban_input(message):
-    user_id = message.from_user.id
+# ==================== SERVICES PANEL CALLBACKS ====================
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("menu:"))
+@check_ban_callback
+@require_join_callback
+def services_navigation(call):
+    user_id = call.from_user.id
+    menu = call.data.split(":")[1]
+    push_nav(user_id, f"menu:{menu}")
+    
+    menu_map = {
+        "ai_tools": "🤖 AI Tools - Coming Soon!",
+        "downloaders": "📥 Downloaders - Coming Soon!",
+        "image_tools": "🖼️ Image Tools - Coming Soon!",
+        "pdf_tools": "📄 PDF Tools - Coming Soon!",
+        "web_tools": "🌐 Web Tools - Coming Soon!",
+        "hash_tools": "🔐 Hash Tools - Coming Soon!",
+        "finance_tools": "💰 Finance Tools - Coming Soon!",
+        "num_checker": "🔢 Number Checker - Coming Soon!",
+        "bypass": "🔓 Bypass Tools - Coming Soon!",
+        "temp_mail": "📧 Temp Mail - Coming Soon!",
+        "upi": "💳 UPI QR - Coming Soon!",
+        "image": "🖼️ Image to PDF - Coming Soon!",
+        "firebase": "🔥 Firebase - Coming Soon!"
+    }
+    
+    kb = types.InlineKeyboardMarkup(row_width=1)
+    kb.add(types.InlineKeyboardButton("◀️ Back to Services", callback_data="menu:services", style="primary"))
+    
+    bot.edit_message_text(
+        f"📌 <b>{menu.replace('_', ' ').title()}</b>\n\n{menu_map.get(menu, 'Feature coming soon!')}",
+        chat_id=call.message.chat.id,
+        message_id=call.message.message_id,
+        parse_mode='HTML',
+        reply_markup=kb
+    )
+    bot.answer_callback_query(call.id)
+
+# ==================== OTHER CALLBACKS ====================
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("profile:"))
+@check_ban_callback
+def profile_actions(call):
+    bot.answer_callback_query(call.id, "✅ Profile feature coming soon!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("support:"))
+@check_ban_callback
+def support_actions(call):
+    bot.answer_callback_query(call.id, "✅ Support feature coming soon!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("orders:"))
+@check_ban_callback
+def orders_actions(call):
+    bot.answer_callback_query(call.id, "✅ Orders feature coming soon!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("track:"))
+@check_ban_callback
+def track_actions(call):
+    bot.answer_callback_query(call.id, "✅ Track feature coming soon!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("deposit:"))
+@check_ban_callback
+def deposit_actions(call):
+    bot.answer_callback_query(call.id, "✅ Deposit feature coming soon!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("refer:"))
+@check_ban_callback
+def refer_actions(call):
+    bot.answer_callback_query(call.id, "✅ Refer feature coming soon!", show_alert=True)
+
+@bot.callback_query_handler(func=lambda call: call.data.startswith("settings:"))
+@check_ban_callback
+def settings_actions(call):
+    bot.answer_callback_query(call.id, "✅ Settings feature coming soon!", show_alert=True)
+
+# ==================== CHECK JOIN ====================
+
+@bot.callback_query_handler(func=lambda call: call.data == "check_join")
+def check_join_callback(call):
+    if check_force_join(call.from_user.id):
+        bot.answer_callback_query(call.id, "✅ Access Granted!", show_alert=True)
+        send_welcome(call.message)
+    else:
+        bot.answer_callback_query(call.id, "❌ Please join channel first!", show_alert=True)
+
+# ==================== FALLBACK ====================
+
+@bot.message_handler(func=lambda m: True)
+def fallback(message):
+    bot.send_message(
+        message.chat.id,
+        "❌ Use the menu buttons below.",
+        reply_markup=bottom_menu()
+    )
+
+# ==================== RUN ====================
+
+if __name__ == "__main__":
+    print("""
+╔═══════════════════════════════════╗
+║    ✦ VIEDIET UTILITY FINAL ✦     ║
+║    Colored UI + Bottom Menu      ║
+╚═══════════════════════════════════╝
+    """)
     try:
-        parts = message.text.split(maxsplit=1)
-        target = int(parts[0])
-        reason = parts[1] if len(parts) > 1 else "No reason"
-        db.ban_user(target, reason, user_id)
-        bot.send_message(user_id, f"✅ Banned {target}")
-    except:
-        bot.send_message(user_id, "❌ Invalid format. Use: <code>USER_ID REASON</code>", parse_mode='HTML')
-
-def handle_unban_input(message):
-    user_id = message.from_user.id
-    try:
-        target = int(message.text.strip())
-        db.unban_user(target)
-        bot.send_message(user_id, f"✅ Unbanned {target}")
-    except:
-        bot.send_message(user_id, "❌ Invalid user ID.")
-
-def handle_broadcast(message):
-    user_id = message.from_user.id
-    msg = message.text.strip()
-    users = db.get_all_users()
-    sent = 0
-    for u in users:
-        try:
-            bot.send_message(u['user_id'], msg, parse_mode='HTML')
-            sent += 1
-            time.sleep(0.05)
-        except:
-            pass
-    bot.send_message(user_id, f"✅ Broadcast sent to {sent} users.")
-
-def handle_add_points(message):
-    user_id = message.from_user.id
-    try:
-        parts = message.text.split()
-        target = int(parts[0])
-        pts = int(parts[1])
-        db.add_points(target, pts)
-        bot.send_message(user_id, f"✅ Added {pts} points to {target}.")
-    except:
-        bot.send_message(user_id, "❌ Invalid format. Use: <code>USER_ID POINTS</code>", parse_mode='HTML')
-
-def handle_give_premium(message):
-    user_id = message.from_user.id
-    try:
-        target = int(message.text.strip())
-        db.set_premium(target, 30)
-        bot.send_message(user_id, f"✅ Premium given to {target} for 30 days.")
-        bot.send_message(target, "🎉 <b>Premium Activated!</b>\n\nAdmin has activated your Premium plan for 30 days.", parse_mode='HTML')
-    except:
-        bot.send_message(user_id, "❌ Invalid user ID.")
+        bot.infinity_polling(timeout=120, long_polling_timeout=120)
+    except KeyboardInterrupt:
+        print("👋 Stopped.")
