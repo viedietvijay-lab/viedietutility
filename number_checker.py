@@ -90,41 +90,98 @@ def flipkart_check(phone):
     except Exception as e:
         return False, f"⚠️ Error: {str(e)[:80]}"
 
-# ==================== BREVISTAY CHECKER (from your script) ====================
+# ==================== BREVISTAY CHECKER (FIXED) ====================
 
 def brevistay_check(number):
-    url = "https://www.brevistay.com/cst/app-api/login"
-    payload = {"is_otp": 1, "is_password": 0, "mobile": number}
-    headers = {"Content-Type": "application/json"}  # aur baaki headers
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 200:
+    try:
+        url = "https://www.brevistay.com/cst/app-api/login"
+        payload = {"is_otp": 1, "is_password": 0, "mobile": number}
+        headers = {
+            "Content-Type": "application/json",
+            "brevi-channel": "DESKTOP_WEB",
+            "brevi-channel-version": "41.0.0",
+            "User-Agent": get_random_user_agent(),
+            "Accept": "application/json",
+            "Origin": "https://www.brevistay.com",
+            "Referer": "https://www.brevistay.com/login"
+        }
+        response = safe_request("POST", url, json=payload, headers=headers)
+        if not response:
+            return False, "⚠️ Request timeout. Try again."
+        
+        if response.status_code != 200:
+            return False, f"⚠️ API returned {response.status_code}"
+        
         data = response.json()
-        # Abhi jo condition hai, usko is tarah karo:
         if data.get("status") == "SUCCESS" and data.get("is_user_registered") in ("1", 1, True):
-            return "✅ Registered"
+            return True, "✅ Registered on Brevistay"
         else:
-            return "❌ Not Registered"
-    else:
-        return "⚠️ API Error"
+            return False, "❌ Not Registered on Brevistay"
+    except Exception as e:
+        return False, f"⚠️ Error: {str(e)[:80]}"
 
-# ==================== SWIGGY CHECKER (from your script) ====================
+
+# ==================== SWIGGY CHECKER (FIXED) ====================
+
+def get_swiggy_csrf():
+    """Fetch CSRF token from Swiggy homepage"""
+    try:
+        url = "https://www.swiggy.com/"
+        headers = {"User-Agent": get_random_user_agent()}
+        resp = requests.get(url, headers=headers, timeout=15)
+        # Extract CSRF token from HTML or cookie
+        # Usually Swiggy sets a cookie named '_csrf' or embeds in meta tag.
+        # For simplicity, we try to get from cookie:
+        csrf = resp.cookies.get("_csrf")
+        if csrf:
+            return csrf
+        # Alternatively, parse from HTML meta tag (if needed)
+        # For now, fallback: try to get from a known pattern in HTML
+        import re
+        match = re.search(r'name="csrf-token" content="([^"]+)"', resp.text)
+        if match:
+            return match.group(1)
+        return None
+    except:
+        return None
 
 def swiggy_check(number):
-    url = "https://www.swiggy.com/dapi/auth/signin-with-check"
-    # CSRF token chahiye, pehle fetch karna padega (agar code mein pehle se hai toh theek)
-    payload = {"mobile": number, "password": "", "_csrf": your_csrf}
-    headers = {"Content-Type": "application/json", "platform": "dweb"}
-    response = requests.post(url, json=payload, headers=headers)
-    if response.status_code == 200:
+    try:
+        # First get CSRF token
+        csrf = get_swiggy_csrf()
+        if not csrf:
+            return False, "⚠️ Failed to fetch CSRF token"
+        
+        url = "https://www.swiggy.com/dapi/auth/signin-with-check"
+        payload = {"mobile": number, "password": "", "_csrf": csrf}
+        headers = {
+            "Content-Type": "application/json",
+            "platform": "dweb",
+            "user-id": "0",
+            "User-Agent": get_random_user_agent(),
+            "Accept": "application/json",
+            "Origin": "https://www.swiggy.com",
+            "Referer": "https://www.swiggy.com/"
+        }
+        response = safe_request("POST", url, json=payload, headers=headers)
+        if not response:
+            return False, "⚠️ Request timeout. Try again."
+        
+        if response.status_code != 200:
+            return False, f"⚠️ API returned {response.status_code}"
+        
         data = response.json()
-        # Sahi field: data["data"]["registered"]
-        if data.get("data", {}).get("registered") == True:
-            return "✅ Registered"
+        # statusCode 2 means success, but we need to check registration
+        if data.get("statusCode") in (0, 2):
+            registered = data.get("data", {}).get("registered", False)
+            if registered:
+                return True, "✅ Registered on Swiggy"
+            else:
+                return False, "❌ Not Registered on Swiggy"
         else:
-            return "❌ Not Registered"
-    else:
-        return "⚠️ API Error: " + str(response.status_code)
-
+            return False, f"⚠️ API Error: {data.get('statusMessage', 'Unknown')}"
+    except Exception as e:
+        return False, f"⚠️ Error: {str(e)[:80]}"
 # ==================== BOT HANDLERS ====================
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu:num_checker")
