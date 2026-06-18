@@ -90,7 +90,7 @@ def track_menu():
 
 def premium_menu():
     buttons = [
-        [("💳 Buy Premium (₹29)", "premium:buy", "success")],
+        [("💳 Buy Premium", "premium:buy", "success")],
         [("⭐ Check Status", "premium:status", "primary")],
         [("◀️ Back", "menu:back", "danger")]
     ]
