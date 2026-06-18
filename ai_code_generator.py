@@ -218,7 +218,8 @@ def handle_code_fixer_input(message):
         parse_mode='HTML'
     )
 
-    # Build prompt for DeepSeek – ✅ FIXED: properly closed triple quotes
-    prompt = f"""Fix the following code. Identify all errors and provide the corrected code.
+    # ✅ FIXED: Properly closed triple-quoted f-string
+    prompt = f"""
+Fix the following code. Identify all errors and provide the corrected code.
 
 CODE:
