@@ -19,8 +19,8 @@ DB_PATH = "viediet_bot.db"
 PAYMENT_API_URL = "https://api.yourgateway.com/create-order"
 PAYMENT_SECRET_KEY = "PAY735DE219C41F68FBD1172102"
 
-# 🔴 UPI ID for receiving payments (ADD THIS LINE)
-UPI_ID = "paytm.s1dw5n0@pty"   # <-- Yahan apna UPI daalo
+# 🔴 UPI ID for receiving payments
+UPI_ID = "paytm.s1dw5n0@pty"
 
 INDIA_COORDINATES = [
     {"lat": 28.6139, "lng": 77.2090},
@@ -34,3 +34,9 @@ INDIA_COORDINATES = [
     {"lat": 21.1702, "lng": 72.8311},
     {"lat": 30.7333, "lng": 76.7794},
 ]
+
+# ==================== DEEPSEEK AI API CONFIGURATION ====================
+# 🔴 Yahan apni DeepSeek API key daalein
+# Sign up at: https://platform.deepseek.com
+DEEPSEEK_API_KEY = "sk-d6ec99e3e65d42779bd0a1a5d84836d6"   # <-- Replace with your actual key
+DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
