@@ -17,10 +17,10 @@ DB_PATH = "viediet_bot.db"
 
 # Payment Gateway (replace with your actual API URL)
 PAYMENT_API_URL = "https://api.yourgateway.com/create-order"
-PAYMENT_SECRET_KEY = "paytm.s1dw5n0@pty"
+PAYMENT_SECRET_KEY = "PAY735DE219C41F68FBD1172102"
 
 # 🔴 UPI ID for receiving payments (ADD THIS LINE)
-UPI_ID = "BHARATPE2G0O0Q6W0S58415@unitype"   # <-- Yahan apna UPI daalo
+UPI_ID = "paytm.s1dw5n0@pty"   # <-- Yahan apna UPI daalo
 
 INDIA_COORDINATES = [
     {"lat": 28.6139, "lng": 77.2090},
