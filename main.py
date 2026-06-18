@@ -1,6 +1,7 @@
 # main.py
 import telebot
 import time
+from bot_instance import bot
 from config import BOT_TOKEN, ADMIN_IDS
 from database import Database
 from force_join import check_force_join, force_join_keyboard
