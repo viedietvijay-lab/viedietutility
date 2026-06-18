@@ -7,7 +7,7 @@ import threading
 import requests
 import json
 from bot_instance import bot
-from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH, UPI_ID  # Add UPI_ID to config
+from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH, BHARATPE2G0O0Q6W0S58415@unitype  # Add UPI_ID to config
 from database import Database
 from points_manager import PointsManager
 from buttons import main_menu, create_colored_keyboard
