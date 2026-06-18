@@ -4,11 +4,6 @@ from telebot import types
 # ==================== COLORED INLINE KEYBOARD ====================
 
 def create_colored_keyboard(buttons, row_width=1):
-    """
-    Creates an inline keyboard with colored buttons.
-    buttons: list of lists, each inner list contains [text, callback_data, style]
-    style: "primary", "success", "danger", "warning"
-    """
     kb = types.InlineKeyboardMarkup(row_width=row_width)
     for row in buttons:
         btns = []
@@ -23,16 +18,10 @@ def create_colored_keyboard(buttons, row_width=1):
         kb.row(*btns)
     return kb
 
-# ==================== MAIN MENU (Compatibility) ====================
+# ==================== MAIN MENU (Backward Compat) ====================
 
 def main_menu():
-    """
-    Legacy main menu – now redirects to services panel.
-    Kept for backward compatibility.
-    """
     return services_panel()
-
-# ==================== BACK BUTTONS ====================
 
 def back_button():
     return create_colored_keyboard([[("◀️ Back", "menu:back", "primary")]])
@@ -43,25 +32,19 @@ def services_back_button():
 # ==================== BOTTOM MENU (Reply Keyboard) ====================
 
 def bottom_menu():
-    """
-    Persistent bottom menu as Reply Keyboard.
-    """
     keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
     buttons = [
         ["🛠️ Services", "👤 Profile", "📦 My Orders"],
-        ["📦 Track Order", "💰 Deposit", "🔗 Refer"],
+        ["📦 Track Order", "⭐ Premium", "🔗 Refer"],
         ["🆘 Support", "📋 Next Page"]
     ]
     for row in buttons:
         keyboard.row(*row)
     return keyboard
 
-# ==================== SERVICES PANEL (Colored Inline) ====================
+# ==================== SERVICES PANEL (Colored) ====================
 
 def services_panel():
-    """
-    Services panel with colored category buttons.
-    """
     buttons = [
         [("🤖 AI Tools", "menu:ai_tools", "primary")],
         [("📥 Downloaders", "menu:downloaders", "success")],
@@ -102,7 +85,7 @@ def support_menu():
     ]
     return create_colored_keyboard(buttons)
 
-# ==================== MY ORDERS MENU ====================
+# ==================== ORDERS MENU ====================
 
 def orders_menu():
     buttons = [
@@ -121,12 +104,12 @@ def track_menu():
     ]
     return create_colored_keyboard(buttons)
 
-# ==================== DEPOSIT MENU ====================
+# ==================== PREMIUM MENU ====================
 
-def deposit_menu():
+def premium_menu():
     buttons = [
-        [("💰 Deposit", "deposit:start", "success")],
-        [("📊 Transaction History", "deposit:history", "primary")],
+        [("💳 Buy Premium (₹49)", "premium:buy", "success")],
+        [("⭐ Check Status", "premium:status", "primary")],
         [("◀️ Back", "menu:services", "primary")]
     ]
     return create_colored_keyboard(buttons)
@@ -135,7 +118,7 @@ def deposit_menu():
 
 def refer_menu():
     buttons = [
-        [("🔗 Refer Link", "refer:link", "success")],
+        [("🔗 Get Referral Link", "refer:link", "success")],
         [("📊 Referral Stats", "refer:stats", "primary")],
         [("◀️ Back", "menu:services", "primary")]
     ]
