@@ -49,7 +49,7 @@ def safe_request(method, url, **kwargs):
             time.sleep(2)
     return None
 
-# ==================== FLIPKART CHECKER (from your script) ====================
+# ==================== FLIPKART CHECKER ====================
 
 def flipkart_check(phone):
     try:
@@ -103,8 +103,10 @@ def brevistay_check(number):
             "User-Agent": get_random_user_agent(),
             "Accept": "application/json",
             "Origin": "https://www.brevistay.com",
-            "Referer": "https://www.brevistay.com/login"
+            "Referer": "https://www.brevistay.com/login",
+            "Accept-Language": "en-US,en;q=0.9"
         }
+        # Use safe_request with longer timeout (30 sec)
         response = safe_request("POST", url, json=payload, headers=headers)
         if not response:
             return False, "⚠️ Request timeout. Try again."
@@ -120,34 +122,47 @@ def brevistay_check(number):
     except Exception as e:
         return False, f"⚠️ Error: {str(e)[:80]}"
 
-
 # ==================== SWIGGY CHECKER (FIXED) ====================
 
 def get_swiggy_csrf():
-    """Fetch CSRF token from Swiggy homepage"""
+    """Fetch CSRF token from Swiggy homepage using session."""
+    session = requests.Session()
+    session.headers.update({"User-Agent": get_random_user_agent()})
     try:
+        # First, load the homepage to get cookies and CSRF token
         url = "https://www.swiggy.com/"
-        headers = {"User-Agent": get_random_user_agent()}
-        resp = requests.get(url, headers=headers, timeout=15)
-        # Extract CSRF token from HTML or cookie
-        # Usually Swiggy sets a cookie named '_csrf' or embeds in meta tag.
-        # For simplicity, we try to get from cookie:
-        csrf = resp.cookies.get("_csrf")
-        if csrf:
-            return csrf
-        # Alternatively, parse from HTML meta tag (if needed)
-        # For now, fallback: try to get from a known pattern in HTML
-        import re
-        match = re.search(r'name="csrf-token" content="([^"]+)"', resp.text)
-        if match:
-            return match.group(1)
+        resp = session.get(url, timeout=15)
+        if resp.status_code != 200:
+            return None
+        
+        # Try to find CSRF token in meta tag
+        meta_match = re.search(r'<meta name="csrf-token" content="([^"]+)"', resp.text)
+        if meta_match:
+            return meta_match.group(1)
+        
+        # Alternatively, search for a global variable
+        script_match = re.search(r'window\.__INITIAL_STATE__\s*=\s*({.*?});', resp.text)
+        if script_match:
+            try:
+                data = json.loads(script_match.group(1))
+                csrf = data.get('csrfToken') or data.get('csrf_token')
+                if csrf:
+                    return csrf
+            except:
+                pass
+        
+        # Last resort: check cookies (though unlikely)
+        csrf_cookie = session.cookies.get('_csrf')
+        if csrf_cookie:
+            return csrf_cookie
+        
         return None
-    except:
+    except Exception as e:
+        print(f"CSRF fetch error: {e}")
         return None
 
 def swiggy_check(number):
     try:
-        # First get CSRF token
         csrf = get_swiggy_csrf()
         if not csrf:
             return False, "⚠️ Failed to fetch CSRF token"
@@ -171,7 +186,6 @@ def swiggy_check(number):
             return False, f"⚠️ API returned {response.status_code}"
         
         data = response.json()
-        # statusCode 2 means success, but we need to check registration
         if data.get("statusCode") in (0, 2):
             registered = data.get("data", {}).get("registered", False)
             if registered:
@@ -182,6 +196,7 @@ def swiggy_check(number):
             return False, f"⚠️ API Error: {data.get('statusMessage', 'Unknown')}"
     except Exception as e:
         return False, f"⚠️ Error: {str(e)[:80]}"
+
 # ==================== BOT HANDLERS ====================
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu:num_checker")
