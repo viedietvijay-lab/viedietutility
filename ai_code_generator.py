@@ -30,28 +30,28 @@ def call_deepseek_api(prompt, system_prompt=None):
             "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
-        
+
         messages = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
-        
+
         payload = {
             "model": "deepseek-chat",
             "messages": messages,
             "temperature": 0.3,
             "max_tokens": 2000
         }
-        
+
         response = requests.post(DEEPSEEK_API_URL, json=payload, headers=headers, timeout=60)
-        
+
         if response.status_code == 200:
             data = response.json()
             return data.get("choices", [{}])[0].get("message", {}).get("content", "")
         else:
             print(f"DeepSeek API Error: {response.status_code} - {response.text}")
             return None
-            
+
     except Exception as e:
         print(f"DeepSeek API Exception: {e}")
         return None
@@ -63,13 +63,13 @@ def ai_tools_menu(call):
     """Show AI Tools menu"""
     user_id = call.from_user.id
     push_nav(user_id, "menu:ai_tools")
-    
+
     buttons = [
         [("💻 Code Generator", "ai:code_gen", "primary")],
         [("🔧 Code Fixer", "ai:code_fixer", "success")],
         [("◀️ Back to Services", "menu:services", "primary")]
     ]
-    
+
     bot.edit_message_text(
         "🤖 <b>AI TOOLS</b>\n\n"
         "Select a tool:\n\n"
@@ -89,13 +89,13 @@ def ai_tools_menu(call):
 def code_gen_start(call):
     """Start code generation flow"""
     user_id = call.from_user.id
-    
+
     if not pm.can_use_tool(user_id):
         bot.answer_callback_query(call.id, f"❌ Need {TOOL_COST} point!", show_alert=True)
         return
-    
+
     user_code_state[user_id] = {"step": "language", "mode": "generate"}
-    
+
     buttons = [
         [("🐍 Python", "code_lang:python")],
         [("🌐 JavaScript", "code_lang:javascript")],
@@ -105,7 +105,7 @@ def code_gen_start(call):
         [("📜 Go", "code_lang:go")],
         [("🔙 Back", "menu:ai_tools")]
     ]
-    
+
     bot.edit_message_text(
         "💻 <b>AI Code Generator</b>\n\n"
         "Step 1: Select programming language:\n\n"
@@ -123,16 +123,16 @@ def code_gen_start(call):
 def code_fixer_start(call):
     """Start code fixer flow"""
     user_id = call.from_user.id
-    
+
     if not pm.can_use_tool(user_id):
         bot.answer_callback_query(call.id, f"❌ Need {TOOL_COST} point!", show_alert=True)
         return
-    
+
     user_code_state[user_id] = {"step": "code_input", "mode": "fix"}
-    
+
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(types.InlineKeyboardButton("◀️ Back", callback_data="menu:ai_tools", style="danger"))
-    
+
     bot.edit_message_text(
         "🔧 <b>AI Code Fixer</b>\n\n"
         "Send me your code and describe the issue.\n\n"
@@ -156,7 +156,7 @@ def code_language_selected(call):
     """Handle language selection for code generation"""
     user_id = call.from_user.id
     language = call.data.split(":")[1]
-    
+
     lang_names = {
         "python": "Python 🐍",
         "javascript": "JavaScript 🌐",
@@ -166,17 +166,17 @@ def code_language_selected(call):
         "go": "Go 📜"
     }
     lang_name = lang_names.get(language, language)
-    
+
     user_code_state[user_id] = {
         "step": "prompt",
         "mode": "generate",
         "language": language,
         "language_name": lang_name
     }
-    
+
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(types.InlineKeyboardButton("◀️ Back", callback_data="menu:ai_tools", style="danger"))
-    
+
     bot.edit_message_text(
         f"💻 <b>AI Code Generator</b>\n\n"
         f"Language: <b>{lang_name}</b>\n\n"
@@ -200,25 +200,25 @@ def handle_code_fixer_input(message):
     """Handle code fixer input"""
     user_id = message.from_user.id
     text = message.text.strip()
-    
+
     if not text:
         bot.send_message(user_id, "❌ Please send your code.")
         return
-    
+
     # Deduct points
     if not pm.use_tool(user_id):
         bot.send_message(user_id, f"❌ Insufficient points! Need {TOOL_COST} point.", reply_markup=main_menu())
         del user_code_state[user_id]
         return
-    
+
     # Show processing
     processing = bot.send_message(
         user_id,
         "🔧 <b>Analyzing and fixing code...</b>\n\nPlease wait a moment.\n\n⚡ Powered by DeepSeek AI",
         parse_mode='HTML'
     )
-    
-    # Build prompt for DeepSeek
+
+    # Build prompt for DeepSeek – ✅ FIXED: properly closed triple quotes
     prompt = f"""Fix the following code. Identify all errors and provide the corrected code.
 
 CODE:
