@@ -17,7 +17,7 @@ from bypass import *
 from firebase import *
 from profile import *
 from support import *
-from premium import *
+from premium import *   # contains buy_premium handler
 
 db = Database()
 
@@ -186,7 +186,7 @@ def premium_handler(message):
     text = f"""
 ⭐ <b>Premium Plan</b>
 
-Price: ₹49 (one-time)
+Price: ₹29 (one-time)
 Benefits:
 • Unlimited tools
 • No point deduction
@@ -234,7 +234,7 @@ Click the button below to join.
 """
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(types.InlineKeyboardButton("👥 Join Support Group", url=FORCE_GROUP, style="primary"))
-    kb.add(types.InlineKeyboardButton("◀️ Back", callback_data="menu:services", style="primary"))
+    kb.add(types.InlineKeyboardButton("◀️ Back", callback_data="menu:back", style="danger"))
     bot.send_message(user_id, text, parse_mode='HTML', reply_markup=kb)
 
 @bot.message_handler(func=lambda m: m.text == "📋 Next Page")
@@ -329,17 +329,12 @@ def services_navigation(call):
     )
     bot.answer_callback_query(call.id)
 
-# ==================== OTHER CALLBACKS ====================
+# ==================== PROFILE / ORDERS / TRACK / REFER CALLBACKS ====================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("profile:"))
 @check_ban_callback
 def profile_actions(call):
     bot.answer_callback_query(call.id, "✅ Profile feature coming soon!", show_alert=True)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith("support:"))
-@check_ban_callback
-def support_actions(call):
-    bot.answer_callback_query(call.id, "✅ Support feature coming soon!", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("orders:"))
 @check_ban_callback
@@ -351,42 +346,6 @@ def orders_actions(call):
 def track_actions(call):
     bot.answer_callback_query(call.id, "✅ Track feature coming soon!", show_alert=True)
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith("premium:"))
-@check_ban_callback
-def premium_actions(call):
-    user_id = call.from_user.id
-    action = call.data.split(":")[1]
-    if action == "buy":
-        # Trigger the existing premium buy flow (from premium.py)
-        # We need to call the handler from premium.py
-        # Simpler: send a message with the premium plan
-        is_prem = db.is_premium(user_id)
-        if is_prem:
-            bot.answer_callback_query(call.id, "✅ Already premium!", show_alert=True)
-        else:
-            # Call the buy_premium function from premium.py (if imported)
-            # For now, just show a message
-            bot.edit_message_text(
-                "💳 <b>Buy Premium</b>\n\nClick the button below to start payment.",
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                parse_mode='HTML',
-                reply_markup=types.InlineKeyboardMarkup(row_width=1).add(
-                    types.InlineKeyboardButton("💳 Proceed to Payment", callback_data="premium:buy_confirm", style="success"),
-                    types.InlineKeyboardButton("◀️ Back", callback_data="menu:services", style="primary")
-                )
-            )
-        bot.answer_callback_query(call.id)
-        return
-    elif action == "status":
-        is_prem = db.is_premium(user_id)
-        bot.answer_callback_query(call.id, f"Premium: {'✅ Active' if is_prem else '❌ Inactive'}", show_alert=True)
-        return
-    elif action == "buy_confirm":
-        # This is a placeholder – you can connect to premium.py's actual buy function
-        bot.answer_callback_query(call.id, "✅ Payment integration coming soon!", show_alert=True)
-        return
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith("refer:"))
 @check_ban_callback
 def refer_actions(call):
@@ -394,25 +353,17 @@ def refer_actions(call):
     action = call.data.split(":")[1]
     if action == "link":
         link = f"https://t.me/{bot.get_me().username}?start={user_id}"
-        bot.answer_callback_query(call.id, "📋 Link copied to your chat!", show_alert=False)
+        bot.answer_callback_query(call.id, "📋 Copied to chat!")
         bot.send_message(user_id, f"🔗 Your referral link:\n<code>{link}</code>", parse_mode='HTML')
     elif action == "stats":
-        user = db.get_user(user_id)
-        referrals = db.get_referral_count(user_id)  # you may need to implement this
-        bot.answer_callback_query(call.id, f"📊 Total Referrals: {referrals}", show_alert=True)
-    bot.answer_callback_query(call.id)
+        # Placeholder – implement referral count if needed
+        bot.answer_callback_query(call.id, "📊 Referral stats coming soon!", show_alert=True)
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("settings:") or call.data.startswith("security:") or call.data.startswith("help:"))
 @check_ban_callback
 def other_actions(call):
     page = call.data.split(":")[0]
-    if page == "settings":
-        bot.answer_callback_query(call.id, "⚙️ Settings - Coming Soon!", show_alert=True)
-    elif page == "security":
-        bot.answer_callback_query(call.id, "🔐 Security - Coming Soon!", show_alert=True)
-    elif page == "help":
-        bot.answer_callback_query(call.id, "💡 Help Center - Coming Soon!", show_alert=True)
-    # Edit message to show something
+    bot.answer_callback_query(call.id, f"✅ {page.title()} feature coming soon!", show_alert=True)
     bot.edit_message_text(
         f"📌 <b>{page.title()}</b>\n\nThis feature is under development.",
         chat_id=call.message.chat.id,
@@ -420,6 +371,18 @@ def other_actions(call):
         parse_mode='HTML',
         reply_markup=back_button()
     )
+
+# ==================== PREMIUM ACTION (uses existing buy_premium) ====================
+
+# premium:buy is already handled in premium.py, but we need to ensure it's imported
+# We'll also handle premium:status separately.
+
+@bot.callback_query_handler(func=lambda call: call.data == "premium:status")
+@check_ban_callback
+def premium_status(call):
+    user_id = call.from_user.id
+    is_prem = db.is_premium(user_id)
+    bot.answer_callback_query(call.id, f"Premium: {'✅ Active' if is_prem else '❌ Inactive'}", show_alert=True)
 
 # ==================== CHECK JOIN ====================
 
