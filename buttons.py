@@ -22,20 +22,20 @@ def main_menu():
 def back_button():
     return create_colored_keyboard([[("◀️ Back", "menu:back", "danger")]])
 
-def services_back_button():
-    return create_colored_keyboard([[("◀️ Back to Services", "menu:services", "primary")]])
-
+# ==================== BOTTOM MENU ====================
 def bottom_menu():
-    keyboard = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+    """Only required buttons: Services, Profile, Refer, Support, Premium"""
+    keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     buttons = [
-        ["🛠️ Services", "👤 Profile", "📦 My Orders"],
-        ["📦 Track Order", "⭐ Premium", "🔗 Refer"],
-        ["🆘 Support", "📋 Next Page"]
+        ["🛠️ Services", "👤 Profile"],
+        ["🔗 Refer", "🆘 Support"],
+        ["⭐ Premium"]
     ]
     for row in buttons:
         keyboard.row(*row)
     return keyboard
 
+# ==================== SERVICES PANEL ====================
 def services_panel():
     buttons = [
         [("🤖 AI Tools", "menu:ai_tools", "primary")],
@@ -54,48 +54,26 @@ def services_panel():
     ]
     return create_colored_keyboard(buttons, row_width=2)
 
+# ==================== PROFILE MENU ====================
 def profile_menu():
     buttons = [
         [("👤 My Account", "profile:account", "primary")],
         [("📊 My Stats", "profile:stats", "success")],
-        [("⭐ Premium", "profile:premium", "warning")],
         [("◀️ Back", "menu:back", "danger")]
     ]
     return create_colored_keyboard(buttons)
 
+# ==================== SUPPORT MENU ====================
 def support_menu():
     buttons = [
         [("📞 Contact Admin", "support:contact", "primary")],
         [("🐛 Report Bug", "support:bug", "danger")],
         [("❓ FAQ", "support:faq", "success")],
-        [("📖 User Guide", "support:guide", "warning")],
         [("◀️ Back", "menu:back", "danger")]
     ]
     return create_colored_keyboard(buttons)
 
-def orders_menu():
-    buttons = [
-        [("📋 Recent Orders", "orders:recent", "primary")],
-        [("📊 Order History", "orders:history", "success")],
-        [("◀️ Back", "menu:back", "danger")]
-    ]
-    return create_colored_keyboard(buttons)
-
-def track_menu():
-    buttons = [
-        [("🔍 Track Order", "track:order", "primary")],
-        [("◀️ Back", "menu:back", "danger")]
-    ]
-    return create_colored_keyboard(buttons)
-
-def premium_menu():
-    buttons = [
-        [("💳 Buy Premium", "premium:buy", "success")],
-        [("⭐ Check Status", "premium:status", "primary")],
-        [("◀️ Back", "menu:back", "danger")]
-    ]
-    return create_colored_keyboard(buttons)
-
+# ==================== REFER MENU ====================
 def refer_menu():
     buttons = [
         [("🔗 Get Referral Link", "refer:link", "success")],
@@ -104,11 +82,11 @@ def refer_menu():
     ]
     return create_colored_keyboard(buttons)
 
-def next_page_menu():
+# ==================== PREMIUM MENU ====================
+def premium_menu():
     buttons = [
-        [("⚙️ Settings", "settings:page", "primary")],
-        [("🔐 Security", "security:page", "danger")],
-        [("💡 Help Center", "help:page", "success")],
+        [("💳 Buy Premium", "premium:buy", "success")],
+        [("⭐ Check Status", "premium:status", "primary")],
         [("◀️ Back", "menu:back", "danger")]
     ]
     return create_colored_keyboard(buttons)
