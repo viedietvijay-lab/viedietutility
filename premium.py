@@ -9,7 +9,7 @@ import logging
 import urllib.parse
 from telebot import types
 from bot_instance import bot
-from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH
+from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH, UPI_ID   # ✅ Import UPI_ID
 from database import Database
 from points_manager import PointsManager
 from buttons import main_menu, create_colored_keyboard
@@ -19,10 +19,6 @@ logger = logging.getLogger(__name__)
 
 db = Database()
 pm = PointsManager()
-
-# ==================== VC GATEWAY MERCHANT UPI ====================
-# 🔴 USE THIS EXACT UPI FROM YOUR QR SCRIPT
-MERCHANT_UPI = "paytm.s1dw5n0@pty"   # OR "BHARATPE2G000Q6W0S58415@unitype"
 
 # ==================== VC GATEWAY API CALL ====================
 
@@ -107,10 +103,9 @@ def buy_premium(call):
     # Save in DB
     db.add_transaction(user_id, order_id, "", amount, "pending")
     
-    # Build UPI string exactly like VC Gateway script
-    # 🔴 USING MERCHANT UPI (NOT PERSONAL UPI)
+    # Build UPI string using UPI_ID from config
     upi_string = (
-        f"upi://pay?pa={MERCHANT_UPI}"
+        f"upi://pay?pa={UPI_ID}"   # ✅ Now using config.UPI_ID
         f"&pn=VC%20Payment%20Gateway"
         f"&tid={order_id}"
         f"&tr={order_id}"
@@ -131,7 +126,7 @@ def buy_premium(call):
             f"╚════════════════════╝\n\n"
             f"💰 <b>Amount:</b> ₹{amount}\n"
             f"🆔 <b>Order ID:</b> {order_id}\n"
-            f"🏦 <b>UPI:</b> <code>{MERCHANT_UPI}</code>\n\n"
+            f"🏦 <b>UPI:</b> <code>{UPI_ID}</code>\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"⚠️ Complete the payment using the QR code above.\n"
             f"After successful payment, tap the button below.\n"
@@ -260,4 +255,4 @@ def give_premium_cmd(message):
             parse_mode='HTML'
         )
     except:
-        bot.send_message(user_id, "❌ Usage: <code>/givepremium &lt;user_id&gt;</code>", parse_mode='HTML')    
+        bot.send_message(user_id, "❌ Usage: <code>/givepremium &lt;user_id&gt;</code>", parse_mode='HTML')
