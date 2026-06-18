@@ -7,7 +7,7 @@ import threading
 import requests
 import json
 from bot_instance import bot
-from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH
+from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH, UPI_ID  # Add UPI_ID to config
 from database import Database
 from points_manager import PointsManager
 from buttons import main_menu, create_colored_keyboard
@@ -20,7 +20,8 @@ pm = PointsManager()
 def create_payment_order(user_id):
     """
     Create a payment order using VC Gateway.
-    The gateway uses a simple API key authentication.
+    We generate a UPI QR with the fixed UPI ID and amount.
+    The order is stored in DB as pending.
     """
     try:
         order_id = f"ORD_{user_id}_{int(time.time())}"
@@ -29,9 +30,7 @@ def create_payment_order(user_id):
         db.add_transaction(user_id, order_id, "", PREMIUM_PRICE, "pending")
         
         # Generate UPI QR code for payment
-        # (VC Gateway works with UPI, so we generate a QR with amount)
-        upi_id = "viediet@upi"  # Replace with your actual UPI ID
-        upi_url = f"upi://pay?pa={upi_id}&am={PREMIUM_PRICE}&cu=INR&tn=Premium"
+        upi_url = f"upi://pay?pa={UPI_ID}&am={PREMIUM_PRICE}&cu=INR&tn=Premium"
         
         qr = qrcode.QRCode(version=2, box_size=10, border=4)
         qr.add_data(upi_url)
@@ -43,7 +42,7 @@ def create_payment_order(user_id):
         return {
             "order_id": order_id,
             "qr_code": qr_path,
-            "upi_id": upi_id,
+            "upi_id": UPI_ID,
             "amount": PREMIUM_PRICE
         }
     except Exception as e:
@@ -79,16 +78,20 @@ def check_order_status(order_id, amount):
 def poll_payment(user_id, order_id, amount):
     """
     Background thread to auto-verify payment.
-    Polls VC Gateway every 5 seconds for up to 5 minutes.
+    Waits 30 seconds before first check, then polls every 5 seconds for up to 5 minutes.
     """
+    # Wait 30 seconds to give user time to pay
+    time.sleep(30)
+    
     attempts = 0
-    max_attempts = 60  # 60 * 5 seconds = 5 minutes
+    max_attempts = 54  # 54 * 5 seconds = 4.5 minutes (total ~5 min including initial wait)
     
     while attempts < max_attempts:
         time.sleep(5)
         attempts += 1
         
         status = check_order_status(order_id, amount)
+        print(f"Poll {attempts}: status = {status}")
         
         if status == "success":
             # Activate premium
@@ -194,7 +197,8 @@ def buy_premium(call):
                 f"💳 <b>Scan to pay ₹{PREMIUM_PRICE}</b>\n\n"
                 f"🏦 <b>UPI:</b> <code>{order['upi_id']}</code>\n"
                 f"🆔 <b>Order ID:</b> <code>{order['order_id']}</code>\n\n"
-                f"⏳ Payment will be <b>auto-verified</b> within 5 minutes."
+                f"⏳ Payment will be <b>auto-verified</b> within 5 minutes.\n"
+                f"Please complete the payment now."
             ),
             parse_mode='HTML'
         )
