@@ -11,13 +11,13 @@ FORCE_GROUP = "https://t.me/viedietlooterschat"
 REFERRAL_POINTS = 8
 TOOL_COST = 1
 SIGNUP_BONUS = 5
-PREMIUM_PRICE = 2  # ₹2
+PREMIUM_PRICE = 1  # ₹2
 
 DB_PATH = "viediet_bot.db"
 
 # Payment Gateway (replace with your actual API URL)
 PAYMENT_API_URL = "https://api.yourgateway.com/create-order"
-PAYMENT_SECRET_KEY = "PAY735DE219C41F68FBD1172102"
+PAYMENT_SECRET_KEY = "paytm.s1dw5n0@pty"
 
 # 🔴 UPI ID for receiving payments (ADD THIS LINE)
 UPI_ID = "BHARATPE2G0O0Q6W0S58415@unitype"   # <-- Yahan apna UPI daalo
