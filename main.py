@@ -18,7 +18,7 @@ from profile import *
 from support import *
 from premium import *
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 db = Database()
 
 # ===== Decorators =====
