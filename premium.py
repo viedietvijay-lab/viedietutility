@@ -6,9 +6,10 @@ import time
 import requests
 import sqlite3
 import logging
+import urllib.parse
 from telebot import types
 from bot_instance import bot
-from config import PREMIUM_PRICE, ADMIN_IDS, UPI_ID, PAYMENT_SECRET_KEY, DB_PATH
+from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH
 from database import Database
 from points_manager import PointsManager
 from buttons import main_menu, create_colored_keyboard
@@ -19,6 +20,10 @@ logger = logging.getLogger(__name__)
 db = Database()
 pm = PointsManager()
 
+# ==================== VC GATEWAY MERCHANT UPI ====================
+# 🔴 USE THIS EXACT UPI FROM YOUR QR SCRIPT
+MERCHANT_UPI = "paytm.s1dw5n0@pty"   # OR "BHARATPE2G000Q6W0S58415@unitype"
+
 # ==================== VC GATEWAY API CALL ====================
 
 def check_payment_status(order_id, amount):
@@ -27,19 +32,28 @@ def check_payment_status(order_id, amount):
     """
     url = (
         "https://vcapi.vcstore.site/payment_api.php"
-        f"?api_key={PAY735DE219C41F68FBD1172102}"
+        f"?api_key={PAYMENT_SECRET_KEY}"
         f"&order_id={order_id}"
         f"&amount={amount}"
     )
     logger.info(f"Checking payment: {url}")
+    
     try:
         resp = requests.get(url, timeout=30)
-        logger.info(f"Response: {resp.status_code} - {resp.text}")
+        logger.info(f"Response status: {resp.status_code}")
+        logger.info(f"Response text: {resp.text[:500]}")
+        
         if resp.status_code == 200:
             data = resp.json()
             status = data.get("status", "pending")
             amount_credited = data.get("amount_credited", 0)
+            logger.info(f"Status: {status}, Amount credited: {amount_credited}")
             return status, amount_credited
+        else:
+            logger.error(f"HTTP Error: {resp.status_code}")
+            return "pending", 0
+    except requests.exceptions.Timeout:
+        logger.error("Timeout while checking payment")
         return "pending", 0
     except Exception as e:
         logger.error(f"Status check error: {e}")
@@ -51,6 +65,7 @@ def check_payment_status(order_id, amount):
 def premium_menu(call):
     user_id = call.from_user.id
     is_prem = db.is_premium(user_id)
+    
     text = (
         f"⭐ <b>Premium Plan</b>\n\n"
         f"Price: ₹{PREMIUM_PRICE} (one-time)\n\n"
@@ -60,10 +75,12 @@ def premium_menu(call):
         f"• All features unlocked\n\n"
         f"<b>Status:</b> {'✅ Active' if is_prem else '❌ Inactive'}"
     )
+    
     buttons = []
     if not is_prem:
         buttons.append([("💳 Buy Premium (₹49)", "premium:buy")])
     buttons.append([("◀️ Back", "menu:main")])
+    
     bot.edit_message_text(
         text,
         chat_id=call.message.chat.id,
@@ -78,20 +95,22 @@ def premium_menu(call):
 @bot.callback_query_handler(func=lambda call: call.data == "premium:buy")
 def buy_premium(call):
     user_id = call.from_user.id
+    
     if db.is_premium(user_id):
         bot.answer_callback_query(call.id, "⭐ Already premium!", show_alert=True)
         return
-
+    
     # Generate order ID (like ORD + timestamp)
     order_id = f"ORD{int(time.time() * 1000)}"
     amount = PREMIUM_PRICE
-
+    
     # Save in DB
     db.add_transaction(user_id, order_id, "", amount, "pending")
-
+    
     # Build UPI string exactly like VC Gateway script
+    # 🔴 USING MERCHANT UPI (NOT PERSONAL UPI)
     upi_string = (
-        f"upi://pay?pa={UPI_ID}"
+        f"upi://pay?pa={MERCHANT_UPI}"
         f"&pn=VC%20Payment%20Gateway"
         f"&tid={order_id}"
         f"&tr={order_id}"
@@ -99,11 +118,10 @@ def buy_premium(call):
         f"&am={amount}"
         f"&cu=INR"
     )
-
-    # Generate QR using quickchart.io (like the JS script)
-    import urllib.parse
+    
+    # Generate QR using quickchart.io
     qr_url = f"https://quickchart.io/qr?text={urllib.parse.quote(upi_string)}"
-
+    
     bot.send_photo(
         user_id,
         qr_url,
@@ -112,7 +130,8 @@ def buy_premium(call):
             f"     💳 <b>VC PAYMENT GATEWAY</b>\n"
             f"╚════════════════════╝\n\n"
             f"💰 <b>Amount:</b> ₹{amount}\n"
-            f"🆔 <b>Order ID:</b> {order_id}\n\n"
+            f"🆔 <b>Order ID:</b> {order_id}\n"
+            f"🏦 <b>UPI:</b> <code>{MERCHANT_UPI}</code>\n\n"
             f"━━━━━━━━━━━━━━━━━━\n"
             f"⚠️ Complete the payment using the QR code above.\n"
             f"After successful payment, tap the button below.\n"
@@ -120,7 +139,7 @@ def buy_premium(call):
         ),
         parse_mode='HTML'
     )
-
+    
     # Check Payment button
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(
@@ -130,77 +149,83 @@ def buy_premium(call):
     bot.send_message(user_id, "📌 Click after you complete the payment.", reply_markup=kb)
     bot.answer_callback_query(call.id)
 
-# ==================== CHECK PAYMENT ====================
+# ==================== CHECK PAYMENT (FIXED) ====================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("premium:check:"))
 def check_payment(call):
     user_id = call.from_user.id
     order_id = call.data.split(":")[2]
-
-    # Immediate feedback
+    
+    # Immediate feedback to user
     bot.answer_callback_query(call.id, "⏳ Checking payment...")
-
+    
     # Send processing message
-    processing_msg = bot.send_message(user_id, "⏳ Checking payment status... Please wait.")
-
+    processing_msg = bot.send_message(
+        user_id,
+        "⏳ <b>Checking payment status...</b>\n\nPlease wait a moment.",
+        parse_mode='HTML'
+    )
+    
     # Get order details from DB
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute("SELECT amount, status FROM transactions WHERE order_id = ?", (order_id,))
     row = cur.fetchone()
     conn.close()
-
+    
     if not row:
         bot.edit_message_text(
-            "❌ Order not found. Please try again or contact admin.",
+            "❌ Order not found. Please try again.",
             chat_id=user_id,
             message_id=processing_msg.message_id
         )
         return
-
+    
     amount = row[0]
     current_status = row[1]
-
+    
     if current_status == "success":
         bot.edit_message_text(
-            "✅ Already verified!\n\nYour Premium is active.",
+            "✅ <b>Already Verified!</b>\n\nYour Premium is active.",
             chat_id=user_id,
-            message_id=processing_msg.message_id
+            message_id=processing_msg.message_id,
+            parse_mode='HTML'
         )
         return
-
+    
     # Call VC Gateway API
     status, credited_amount = check_payment_status(order_id, amount)
-    logger.info(f"Status: {status}, Credited: {credited_amount}")
-
+    logger.info(f"Order: {order_id}, Status: {status}, Credited: {credited_amount}")
+    
     if status == "success":
         # Activate premium
         db.set_premium(user_id, 30)
         db.update_transaction(order_id, "", "success")
+        
         bot.edit_message_text(
             "🎉 <b>Payment Confirmed!</b>\n\n"
-            "Your Premium plan is now active for 30 days.\n"
+            "✅ Your Premium plan is now active for 30 days.\n"
             "Enjoy unlimited access to all tools!",
             chat_id=user_id,
             message_id=processing_msg.message_id,
             parse_mode='HTML'
         )
         bot.send_message(user_id, "✅ Premium activated!", reply_markup=main_menu())
-
+        
     elif status == "failed":
         bot.edit_message_text(
-            f"❌ <b>Payment not detected.</b>\n\n"
-            f"Order ID: <code>{order_id}</code>\n\n"
-            f"If you have paid, please wait 2-3 minutes and try again.\n"
-            f"If the issue persists, contact admin.",
+            f"❌ <b>Payment Not Found</b>\n\n"
+            f"🆔 Order ID: <code>{order_id}</code>\n\n"
+            f"Please complete the payment and try again.\n"
+            f"If you already paid, please wait 2-3 minutes and retry.",
             chat_id=user_id,
             message_id=processing_msg.message_id,
             parse_mode='HTML'
         )
-
+        
     else:  # pending
         bot.edit_message_text(
-            f"⏳ <b>Payment pending.</b>\n\n"
+            f"⏳ <b>Payment Pending</b>\n\n"
             f"We are still waiting for confirmation.\n"
             f"Please try again in a few minutes.",
             chat_id=user_id,
@@ -215,20 +240,24 @@ def give_premium_cmd(message):
     user_id = message.from_user.id
     if user_id not in ADMIN_IDS:
         return
+    
     try:
         parts = message.text.split()
         target = int(parts[1])
         db.set_premium(target, 30)
+        
         conn = sqlite3.connect(DB_PATH)
         cur = conn.cursor()
         cur.execute("UPDATE transactions SET status='success' WHERE user_id=?", (target,))
         conn.commit()
         conn.close()
+        
         bot.send_message(user_id, f"✅ Premium activated for {target} for 30 days.")
         bot.send_message(
             target,
-            "🎉 <b>Premium Activated!</b>\n\nAdmin has activated your Premium plan for 30 days.",
+            "🎉 <b>Premium Activated!</b>\n\n"
+            "Admin has activated your Premium plan for 30 days.",
             parse_mode='HTML'
         )
     except:
-        bot.send_message(user_id, "❌ Usage: <code>/givepremium &lt;user_id&gt;</code>", parse_mode='HTML')
+        bot.send_message(user_id, "❌ Usage: <code>/givepremium &lt;user_id&gt;</code>", parse_mode='HTML')    
