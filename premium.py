@@ -9,10 +9,10 @@ import logging
 import urllib.parse
 from telebot import types
 from bot_instance import bot
-from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH, UPI_ID   # ✅ Import UPI_ID
+from config import PREMIUM_PRICE, ADMIN_IDS, PAYMENT_SECRET_KEY, DB_PATH, UPI_ID
 from database import Database
 from points_manager import PointsManager
-from buttons import main_menu, create_colored_keyboard
+from buttons import create_colored_keyboard, main_menu
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -23,9 +23,6 @@ pm = PointsManager()
 # ==================== VC GATEWAY API CALL ====================
 
 def check_payment_status(order_id, amount):
-    """
-    Calls VC Gateway payment_api.php exactly like the JS script.
-    """
     url = (
         "https://vcapi.vcstore.site/payment_api.php"
         f"?api_key={PAYMENT_SECRET_KEY}"
@@ -74,8 +71,8 @@ def premium_menu(call):
     
     buttons = []
     if not is_prem:
-        buttons.append([("💳 Buy Premium (₹49)", "premium:buy")])
-    buttons.append([("◀️ Back", "menu:main")])
+        buttons.append([("💳 Buy Premium", "premium:buy", "success")])
+    buttons.append([("◀️ Back", "menu:back", "danger")])
     
     bot.edit_message_text(
         text,
@@ -96,16 +93,16 @@ def buy_premium(call):
         bot.answer_callback_query(call.id, "⭐ Already premium!", show_alert=True)
         return
     
-    # Generate order ID (like ORD + timestamp)
+    # Generate order ID
     order_id = f"ORD{int(time.time() * 1000)}"
     amount = PREMIUM_PRICE
     
     # Save in DB
     db.add_transaction(user_id, order_id, "", amount, "pending")
     
-    # Build UPI string using UPI_ID from config
+    # Build UPI string
     upi_string = (
-        f"upi://pay?pa={UPI_ID}"   # ✅ Now using config.UPI_ID
+        f"upi://pay?pa={UPI_ID}"
         f"&pn=VC%20Payment%20Gateway"
         f"&tid={order_id}"
         f"&tr={order_id}"
@@ -114,7 +111,7 @@ def buy_premium(call):
         f"&cu=INR"
     )
     
-    # Generate QR using quickchart.io
+    # Generate QR
     qr_url = f"https://quickchart.io/qr?text={urllib.parse.quote(upi_string)}"
     
     bot.send_photo(
@@ -135,26 +132,25 @@ def buy_premium(call):
         parse_mode='HTML'
     )
     
-    # Check Payment button
+    # Check Payment button with colors
     kb = types.InlineKeyboardMarkup(row_width=1)
     kb.add(
-        types.InlineKeyboardButton("✅ Check Payment", callback_data=f"premium:check:{order_id}"),
-        types.InlineKeyboardButton("◀️ Back", callback_data="menu:main")
+        types.InlineKeyboardButton("✅ Check Payment", callback_data=f"premium:check:{order_id}", style="success"),
+        types.InlineKeyboardButton("◀️ Back", callback_data="menu:back", style="danger")
     )
     bot.send_message(user_id, "📌 Click after you complete the payment.", reply_markup=kb)
     bot.answer_callback_query(call.id)
 
-# ==================== CHECK PAYMENT (FIXED) ====================
+# ==================== CHECK PAYMENT ====================
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith("premium:check:"))
 def check_payment(call):
     user_id = call.from_user.id
     order_id = call.data.split(":")[2]
     
-    # Immediate feedback to user
+    # Immediate feedback
     bot.answer_callback_query(call.id, "⏳ Checking payment...")
     
-    # Send processing message
     processing_msg = bot.send_message(
         user_id,
         "⏳ <b>Checking payment status...</b>\n\nPlease wait a moment.",
@@ -193,7 +189,6 @@ def check_payment(call):
     logger.info(f"Order: {order_id}, Status: {status}, Credited: {credited_amount}")
     
     if status == "success":
-        # Activate premium
         db.set_premium(user_id, 30)
         db.update_transaction(order_id, "", "success")
         
