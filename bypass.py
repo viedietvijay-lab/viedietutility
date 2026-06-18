@@ -3,7 +3,7 @@ import telebot
 from config import BOT_TOKEN
 from buttons import create_colored_keyboard, back_button
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 
 @bot.callback_query_handler(func=lambda call: call.data == "menu:bypass")
 def bypass_menu(call):
