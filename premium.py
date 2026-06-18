@@ -7,7 +7,7 @@ from database import Database
 from points_manager import PointsManager
 from buttons import main_menu, back_button
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 db = Database()
 pm = PointsManager()
 
