@@ -5,7 +5,7 @@ from config import BOT_TOKEN, ADMIN_IDS
 from database import Database
 from buttons import create_colored_keyboard, back_button, main_menu
 
-bot = telebot.TeleBot(BOT_TOKEN)
+from bot_instance import bot
 db = Database()
 
 def admin_menu():
