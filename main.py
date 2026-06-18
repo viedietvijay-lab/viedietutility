@@ -49,6 +49,15 @@ def check_ban(func):
         return func(message)
     return wrapper
 
+def check_ban_callback(func):
+    def wrapper(call):
+        banned, _ = db.is_banned(call.from_user.id)
+        if banned:
+            bot.answer_callback_query(call.id, "🚫 You are banned!", show_alert=True)
+            return
+        return func(call)
+    return wrapper
+
 def require_join(func):
     def wrapper(message):
         if not check_force_join(message.from_user.id):
