@@ -22,7 +22,7 @@ def check_payment_status(order_id, amount):
     """
     url = (
         "https://vcapi.vcstore.site/payment_api.php"
-        f"?api_key={PAYMENT_SECRET_KEY}"
+        f"?api_key={PAY735DE219C41F68FBD1172102}"
         f"&order_id={order_id}"
         f"&amount={amount}"
     )
