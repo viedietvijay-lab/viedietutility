@@ -1,12 +1,13 @@
-# number_checker.py
+\# number_checker.py
 import telebot
 import requests
 import re
 import time
 import random
+import json
 from telebot import types
 from bot_instance import bot
-from config import TOOL_COST, INDIA_COORDINATES
+from config import TOOL_COST, INDIA_COORDINATES, ADMIN_IDS
 from database import Database
 from points_manager import PointsManager
 from buttons import back_button, main_menu, create_colored_keyboard
@@ -14,39 +15,41 @@ from buttons import back_button, main_menu, create_colored_keyboard
 db = Database()
 pm = PointsManager()
 
+# Store pending phone checks
+pending_phone = {}
+
 # ==================== HELPERS ====================
 
 def get_random_coords():
-    """Return random India coordinates"""
     return random.choice(INDIA_COORDINATES)
 
 def get_random_user_agent():
-    user_agents = [
+    agents = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     ]
-    return random.choice(user_agents)
+    return random.choice(agents)
 
 def safe_request(method, url, **kwargs):
-    """Wrapper for requests with retry logic"""
-    max_retries = 3
+    max_retries = 2
     for attempt in range(max_retries):
         try:
-            # Add random delay to avoid rate limiting
-            time.sleep(random.uniform(0.5, 1.5))
-            kwargs['timeout'] = 20
+            time.sleep(random.uniform(0.3, 1.0))
             if 'headers' in kwargs:
                 kwargs['headers']['User-Agent'] = get_random_user_agent()
+            else:
+                kwargs['headers'] = {'User-Agent': get_random_user_agent()}
+            kwargs['timeout'] = 20
             response = requests.request(method, url, **kwargs)
             return response
         except Exception as e:
             if attempt == max_retries - 1:
                 raise e
-            time.sleep(2 ** attempt)
+            time.sleep(2)
     return None
 
-# ==================== FLIPKART CHECKER ====================
+# ==================== FLIPKART CHECKER (from your script) ====================
 
 def flipkart_check(phone):
     try:
@@ -55,8 +58,10 @@ def flipkart_check(phone):
         headers = {
             "User-Agent": get_random_user_agent(),
             "Accept": "*/*",
+            "Accept-Language": "en-US,en;q=0.5",
             "Content-Type": "application/json",
             "Referer": "https://www.flipkart.com/",
+            "X-User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/117.0 FKUA/website/42/website/Desktop",
             "Origin": "https://www.flipkart.com",
             "Connection": "close"
         }
@@ -64,33 +69,36 @@ def flipkart_check(phone):
         
         response = safe_request("POST", url, headers=headers, json=payload)
         if not response:
-            return False, "⚠️ API request failed (timeout). Please try again."
+            return False, "⚠️ Request timeout. Try again."
         
-        if response.status_code == 200:
-            data = response.json()
-            resp_block = data.get('RESPONSE', {})
-            user_details = resp_block.get('userDetails', {})
-            status = user_details.get("+91" + phone)
-            
-            if status == "VERIFIED":
-                return True, "✅ Registered on Flipkart"
-            elif status == "GUEST":
-                return False, "❌ Not Registered on Flipkart"
-            else:
-                return False, f"⚠️ Unknown status: {status}"
+        if response.status_code != 200:
+            return False, f"⚠️ API Blocked (HTTP {response.status_code})"
+        
+        data = response.json()
+        resp_block = data.get('RESPONSE', {})
+        user_details = resp_block.get('userDetails', {})
+        status = user_details.get("+91" + phone)
+        
+        if status == "VERIFIED":
+            return True, "✅ Registered on Flipkart"
+        elif status == "GUEST":
+            return False, "❌ Not Registered on Flipkart"
+        elif status is None:
+            return False, "⚠️ Number not found in response"
         else:
-            return False, f"⚠️ API Error (HTTP {response.status_code})"
+            return False, f"⚠️ Unknown Status: {status}"
     except Exception as e:
         return False, f"⚠️ Error: {str(e)[:80]}"
 
-# ==================== BREVISTAY CHECKER ====================
+# ==================== BREVISTAY CHECKER (from your script) ====================
 
 def brevistay_check(phone):
     try:
         get_random_coords()
         url = "https://www.brevistay.com/cst/app-api/login"
         headers = {
-            "accept": "application/json",
+            "accept": "application/json, text/plain, */*",
+            "accept-language": "en-US,en;q=0.9",
             "brevi-channel": "DESKTOP_WEB",
             "content-type": "application/json",
             "origin": "https://www.brevistay.com",
@@ -101,24 +109,24 @@ def brevistay_check(phone):
         
         response = safe_request("POST", url, headers=headers, json=payload)
         if not response:
-            return False, "⚠️ API request failed (timeout). Please try again."
+            return False, "⚠️ Request timeout. Try again."
         
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "SUCCESS":
-                is_registered = data.get("is_user_registered") == "1"
-                if is_registered:
-                    return True, "✅ Registered on Brevistay"
-                else:
-                    return False, "❌ Not Registered on Brevistay"
+        if response.status_code != 200:
+            return False, f"⚠️ HTTP Error {response.status_code}"
+        
+        data = response.json()
+        if data.get("status") == "SUCCESS":
+            is_registered = data.get("is_user_registered") == "1"
+            if is_registered:
+                return True, "✅ Registered on Brevistay"
             else:
-                return False, f"⚠️ API Error: {data.get('status', 'Unknown')}"
+                return False, "❌ Not Registered on Brevistay"
         else:
-            return False, f"⚠️ HTTP Error: {response.status_code}"
+            return False, f"⚠️ API Error: {data.get('status', 'Unknown')}"
     except Exception as e:
         return False, f"⚠️ Error: {str(e)[:80]}"
 
-# ==================== SWIGGY CHECKER ====================
+# ==================== SWIGGY CHECKER (from your script) ====================
 
 def swiggy_check(phone):
     try:
@@ -126,31 +134,33 @@ def swiggy_check(phone):
         url = "https://www.swiggy.com/mapi/auth/signin-check"
         headers = {
             "User-Agent": get_random_user_agent(),
-            "Accept": "application/json",
+            "Accept": "application/json, text/plain, */*",
+            "Content-Language": "en-IN,en;q=0.9",
             "Content-Type": "application/json",
             "Origin": "https://www.swiggy.com",
             "Referer": "https://www.swiggy.com/",
-            "x-app-version": "2025.1.0"
+            "x-app-version": "2025.1.0",
+            "x-platform": "web"
         }
         payload = {"phoneNumber": phone}
         
         response = safe_request("POST", url, headers=headers, json=payload)
         if not response:
-            return False, "⚠️ API request failed (timeout). Please try again."
+            return False, "⚠️ Request timeout. Try again."
         
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("statusCode") == 0:
-                user_data = data.get("data", {})
-                is_registered = user_data.get("registered", False)
-                if is_registered:
-                    return True, "✅ Registered on Swiggy"
-                else:
-                    return False, "❌ Not Registered on Swiggy"
+        if response.status_code != 200:
+            return False, f"⚠️ HTTP Error {response.status_code}"
+        
+        data = response.json()
+        if data.get("statusCode") == 0:
+            user_data = data.get("data", {})
+            is_registered = user_data.get("registered", False)
+            if is_registered:
+                return True, "✅ Registered on Swiggy"
             else:
-                return False, f"⚠️ API Error: {data.get('statusCode', 'Unknown')}"
+                return False, "❌ Not Registered on Swiggy"
         else:
-            return False, f"⚠️ HTTP Error: {response.status_code}"
+            return False, f"⚠️ API Error: {data.get('statusCode', 'Unknown')}"
     except Exception as e:
         return False, f"⚠️ Error: {str(e)[:80]}"
 
@@ -192,15 +202,13 @@ def service_selected(call):
     bot.edit_message_text(
         f"📱 <b>{service.title()} Checker</b>\n\n"
         f"Send 10-digit phone number (without +91):\n\n"
-        f"📝 <b>Example:</b> <code>9826621729</code>",
+        f"📝 <b>Example:</b> <code>9876543210</code>",
         chat_id=call.message.chat.id,
         message_id=call.message.message_id,
         parse_mode='HTML',
         reply_markup=kb
     )
     bot.answer_callback_query(call.id)
-
-pending_phone = {}
 
 @bot.message_handler(func=lambda m: m.text and m.text.isdigit() and len(m.text) == 10 and m.from_user.id in pending_phone)
 def handle_number_input(message):
@@ -226,8 +234,7 @@ def handle_number_input(message):
     else:
         registered, msg = False, "❌ Unknown service"
     
-    # Deduct points if check was performed (or we can deduct before)
-    # If check fails due to error, we can refund points later
+    # Deduct points
     pm.use_tool(user_id)
     db.log_feature(user_id, f"number_checker:{service}", phone)
     
